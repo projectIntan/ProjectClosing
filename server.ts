@@ -5,7 +5,7 @@ import { GOOGLE_APPS_SCRIPT_URL } from './src/config';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Support JSON request bodies up to 20MB (for any base64/attachments)
   app.use(express.json({ limit: '20mb' }));
