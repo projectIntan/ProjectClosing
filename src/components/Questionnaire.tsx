@@ -117,15 +117,6 @@ export const Questionnaire: React.FC = () => {
     return questions.map((question, index) => {
       if (index === 0) return question;
 
-      // The asset gateway only controls displayed questions 2 through 11.
-      const isGatedQuestion = typeof question.number === 'number' && question.number <= 10;
-      if (!isGatedQuestion) {
-        return {
-          ...question,
-          number: typeof question.number === 'number' ? question.number + 1 : question.number,
-        };
-      }
-
       return {
         ...question,
         number: typeof question.number === 'number' ? question.number + 1 : question.number,

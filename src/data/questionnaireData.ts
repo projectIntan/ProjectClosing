@@ -709,7 +709,7 @@ export const DEPARTMENT_QUESTIONS: Record<Department, QuestionDefinition[]> = {
       id: 'amw_01_has_asset',
       section: 'asset_management',
       number: 1,
-      question: 'Apakah Project ini memiliki asset?',
+      question: 'Apakah ada pembelian barang berupa asset atau material stock?',
       type: 'radio',
       required: true,
       options: ['Ya', 'Tidak'],
