@@ -23,8 +23,9 @@ export type QuestionType =
 
 export interface QuestionCondition {
   questionId: string;
-  operator: 'equals' | 'notEquals' | 'in' | 'notIn';
+  operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'all';
   value: any;
+  conditions?: QuestionCondition[];
 }
 
 export interface ScaleConfig {

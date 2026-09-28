@@ -12,6 +12,10 @@ export function isQuestionVisible(
   const parentValue = responses[condition.questionId];
 
   switch (condition.operator) {
+    case 'all':
+      return (condition.conditions || []).every((nestedCondition) =>
+        isQuestionVisible(nestedCondition, responses)
+      );
     case 'equals':
       return parentValue === condition.value;
     case 'notEquals':

@@ -706,6 +706,15 @@ export const DEPARTMENT_QUESTIONS: Record<Department, QuestionDefinition[]> = {
 
   'Asset Management & Warehouse': [
     {
+      id: 'amw_01_has_asset',
+      section: 'asset_management',
+      number: 1,
+      question: 'Apakah Project ini memiliki asset?',
+      type: 'radio',
+      required: true,
+      options: ['Ya', 'Tidak'],
+    },
+    {
       id: 'amw_01_assets_recorded',
       section: 'asset_management',
       number: 1,

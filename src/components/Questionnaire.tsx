@@ -102,7 +102,43 @@ export const Questionnaire: React.FC = () => {
     if (!selectedDepartment || !DEPARTMENT_QUESTIONS[selectedDepartment]) {
       return [];
     }
-    return DEPARTMENT_QUESTIONS[selectedDepartment];
+
+    const questions = DEPARTMENT_QUESTIONS[selectedDepartment];
+    if (selectedDepartment !== 'Asset Management & Warehouse') {
+      return questions;
+    }
+
+    const assetGateway = {
+      questionId: 'amw_01_has_asset',
+      operator: 'equals' as const,
+      value: 'Ya',
+    };
+
+    return questions.map((question, index) => {
+      if (index === 0) return question;
+
+      // The asset gateway only controls displayed questions 2 through 11.
+      const isGatedQuestion = typeof question.number === 'number' && question.number <= 10;
+      if (!isGatedQuestion) {
+        return {
+          ...question,
+          number: typeof question.number === 'number' ? question.number + 1 : question.number,
+        };
+      }
+
+      return {
+        ...question,
+        number: typeof question.number === 'number' ? question.number + 1 : question.number,
+        condition: question.condition
+          ? {
+              questionId: assetGateway.questionId,
+              operator: 'all' as const,
+              value: null,
+              conditions: [assetGateway, question.condition],
+            }
+          : assetGateway,
+      };
+    });
   }, [selectedDepartment]);
 
   // Handle Project selection from SearchableSelect
