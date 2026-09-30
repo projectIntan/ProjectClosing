@@ -20,28 +20,58 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [validationError, setValidationError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFiles = (fileList: FileList | null) => {
+  const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
 
+    const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip'];
+    const blockedExtensions = ['exe', 'bat', 'cmd', 'sh', 'js', 'vbs', 'ps1'];
+    const allowedMimeTypes = new Set([
+      'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'image/jpeg', 'image/png', 'application/zip', 'application/x-zip-compressed',
+    ]);
+    const maxBytes = 10 * 1024 * 1024;
+    const selected = Array.from(fileList);
+    const invalid = selected.find((file) => {
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      return !file.name.trim() || file.size > maxBytes || blockedExtensions.includes(extension) ||
+        !allowedExtensions.includes(extension) || Boolean(file.type && !allowedMimeTypes.has(file.type));
+    });
+    if (invalid) {
+      const extension = invalid.name.split('.').pop()?.toLowerCase() || '';
+      setValidationError(invalid.size > maxBytes ? 'File terlalu besar. Maksimal ukuran file adalah 10 MB.' :
+        blockedExtensions.includes(extension) || !allowedExtensions.includes(extension) ||
+        Boolean(invalid.type && !allowedMimeTypes.has(invalid.type)) ? 'Format file tidak didukung.' : 'Nama file tidak valid.');
+      return;
+    }
+
+    setValidationError('');
     setIsUploading(true);
-    // Simulate brief mock upload processing
-    setTimeout(() => {
-      const newFiles: UploadedFileMock[] = Array.from(fileList).map((f) => ({
+    try {
+      const newFiles: UploadedFileMock[] = await Promise.all(selected.map(async (f) => ({
         id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name: f.name,
         size: f.size,
         type: f.type || 'application/octet-stream',
         uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }));
-
+        base64Data: await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+          reader.onerror = () => reject(new Error('file-read-failed'));
+          reader.readAsDataURL(f);
+        }),
+      })));
       onChange([...files, ...newFiles]);
+    } catch {
+      setValidationError('Supporting document gagal diproses. Silakan coba lagi.');
+    } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }, 450);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleRemove = (fileId: string) => {
@@ -149,6 +179,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           </div>
         </div>
       )}
+      {validationError && <p className="text-xs text-rose-600 font-medium">{validationError}</p>}
     </div>
   );
 };

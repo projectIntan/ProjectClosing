@@ -151,6 +151,14 @@ export function prepareSubmissionPayload(
     business_unit: businessUnit,
     client: client,
     answers: answers,
+    supporting_documents: Array.isArray(responses.conc_11_supporting_docs)
+      ? responses.conc_11_supporting_docs.map((file: any) => ({
+          fileName: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          base64Data: file.base64Data,
+        }))
+      : [],
   };
 }
 

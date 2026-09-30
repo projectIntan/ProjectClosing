@@ -1,4 +1,4 @@
-/**
+﻿/**
  * =========================================================================
  * ENTERPRISE PROJECT CLOSING QUESTIONNAIRE - GOOGLE APPS SCRIPT BACKEND API
  * =========================================================================
@@ -94,6 +94,18 @@ function setupSheet() {
     }
   }
 
+  // 4. SHEET: SUPPORTING_DOCUMENTS (never clear existing rows)
+  var docSheet = ss.getSheetByName("SUPPORTING_DOCUMENTS");
+  var docHeaders = ["document_id", "submission_id", "project_code", "project_name", "business_unit", "file_name", "mime_type", "file_size", "drive_file_id", "drive_url", "uploaded_at"];
+  if (!docSheet) {
+    docSheet = ss.insertSheet("SUPPORTING_DOCUMENTS");
+    docSheet.appendRow(docHeaders);
+    formatHeaderRow(docSheet);
+  } else if (docSheet.getLastRow() === 0) {
+    docSheet.appendRow(docHeaders);
+    formatHeaderRow(docSheet);
+  }
+
   Logger.log("Sheet setup completed successfully!");
 }
 
@@ -149,10 +161,12 @@ function doPost(e) {
     // Ensure sheets exist
     var subSheet = ss.getSheetByName("SUBMISSIONS");
     var ansSheet = ss.getSheetByName("ANSWERS");
-    if (!subSheet || !ansSheet) {
+    var docSheet = ss.getSheetByName("SUPPORTING_DOCUMENTS");
+    if (!subSheet || !ansSheet || !docSheet) {
       setupSheet();
       subSheet = ss.getSheetByName("SUBMISSIONS");
       ansSheet = ss.getSheetByName("ANSWERS");
+      docSheet = ss.getSheetByName("SUPPORTING_DOCUMENTS");
     }
 
     // Timestamp in Asia/Jakarta
@@ -165,6 +179,8 @@ function doPost(e) {
       var randNum = Math.floor(1000 + Math.random() * 9000);
       submissionId = "SUB-" + dateStr + "-" + randNum;
     }
+
+    validateSubmissionPayload(payload);
 
     // 1. SAVE TO SUBMISSIONS SHEET
     // Columns: submission_id | timestamp | respondent_name | function | project_code | project_name | business_unit | client | status
@@ -213,25 +229,89 @@ function doPost(e) {
       }
     }
 
-    return createJsonResponse(true, submissionId, "Response saved successfully");
+    var documents = payload.supporting_documents || [];
+    var savedDocuments = [];
+    for (var d = 0; d < documents.length; d++) {
+      savedDocuments.push(saveSupportingDocument(documents[d], payload, submissionId, docSheet));
+    }
+
+    return createJsonResponse(true, submissionId, documents.length > 0 ? "Response and supporting documents saved successfully" : "Response saved successfully", savedDocuments);
 
   } catch (err) {
     Logger.log("Error in doPost: " + err.toString());
-    return createJsonResponse(false, null, "Failed to record response: " + err.toString());
+    return createJsonResponse(false, null, err.message || "Failed to record response.");
   } finally {
     lock.releaseLock();
   }
 }
 
+function validateSubmissionPayload(payload) {
+  if (!payload || typeof payload !== "object") throw new Error("Payload kuesioner tidak valid.");
+  var documents = payload.supporting_documents || [];
+  if (!Array.isArray(documents)) throw new Error("Supporting documents tidak valid.");
+  if (documents.length > 20) throw new Error("Jumlah supporting document terlalu banyak.");
+  for (var i = 0; i < documents.length; i++) {
+    var file = documents[i];
+    if (!file || typeof file.fileName !== "string" || !file.fileName.trim() || typeof file.base64Data !== "string") {
+      throw new Error("Data supporting document tidak lengkap.");
+    }
+    var extension = file.fileName.split(".").pop().toLowerCase();
+    var allowed = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png", "zip"];
+    if (allowed.indexOf(extension) === -1) throw new Error("Format supporting document tidak didukung.");
+    if (Number(file.fileSize) <= 0 || Number(file.fileSize) > 10 * 1024 * 1024) throw new Error("Ukuran supporting document melebihi batas 10 MB.");
+    if (file.base64Data.length > 15 * 1024 * 1024) throw new Error("Data supporting document terlalu besar.");
+  }
+}
+
+function getDriveRootFolder() {
+  var folderId = PropertiesService.getScriptProperties().getProperty("PROJECT_CLOSING_DRIVE_ROOT_FOLDER_ID");
+  if (!folderId) throw new Error("Konfigurasi Google Drive belum tersedia: PROJECT_CLOSING_DRIVE_ROOT_FOLDER_ID.");
+  try {
+    return DriveApp.getFolderById(folderId);
+  } catch (err) {
+    throw new Error("Konfigurasi Google Drive tidak valid. Periksa PROJECT_CLOSING_DRIVE_ROOT_FOLDER_ID.");
+  }
+}
+
+function sanitizeFolderName(value) {
+  return String(value || "UNSPECIFIED").replace(/[\\\\\/:*?"<>|]/g, "_").trim().substring(0, 100) || "UNSPECIFIED";
+}
+
+function getOrCreateProjectFolder(projectCode) {
+  var root = getDriveRootFolder();
+  var name = sanitizeFolderName(projectCode);
+  var folders = root.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : root.createFolder(name);
+}
+
+function getOrCreateSubmissionFolder(projectFolder, submissionId) {
+  var name = sanitizeFolderName(submissionId);
+  var folders = projectFolder.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : projectFolder.createFolder(name);
+}
+
+function saveSupportingDocument(fileData, payload, submissionId, docSheet) {
+  var bytes = Utilities.base64Decode(fileData.base64Data);
+  var projectFolder = getOrCreateProjectFolder(payload.project_code);
+  var submissionFolder = getOrCreateSubmissionFolder(projectFolder, submissionId);
+  var blob = Utilities.newBlob(bytes, fileData.mimeType || "application/octet-stream", sanitizeFolderName(fileData.fileName));
+  var driveFile = submissionFolder.createFile(blob);
+  var uploadedAt = getJakartaTimestamp();
+  var documentId = "DOC-" + Utilities.formatDate(new Date(), TIMEZONE, "yyyyMMdd") + "-" + Math.floor(100000 + Math.random() * 900000);
+  docSheet.appendRow([documentId, submissionId, payload.project_code || "", payload.project_name || "", payload.business_unit || "", fileData.fileName, fileData.mimeType || "", Number(fileData.fileSize), driveFile.getId(), driveFile.getUrl(), uploadedAt]);
+  return { success: true, document_id: documentId, submission_id: submissionId, project_code: payload.project_code || "", file_name: fileData.fileName, mime_type: fileData.mimeType || "", file_size: Number(fileData.fileSize), drive_file_id: driveFile.getId(), drive_url: driveFile.getUrl(), uploaded_at: uploadedAt };
+}
+
 /**
  * Helper to construct JSON response
  */
-function createJsonResponse(success, submissionId, message) {
+function createJsonResponse(success, submissionId, message, documents) {
   var output = {
     success: success,
     submission_id: submissionId,
     message: message
   };
+  if (documents) output.documents = documents;
 
   return ContentService.createTextOutput(JSON.stringify(output))
     .setMimeType(ContentService.MimeType.JSON);
@@ -243,3 +323,4 @@ function createJsonResponse(success, submissionId, message) {
 function getJakartaTimestamp() {
   return Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
+

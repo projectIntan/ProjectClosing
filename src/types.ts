@@ -65,6 +65,8 @@ export interface UploadedFileMock {
   size: number;
   type: string;
   uploadedAt: string;
+  /** Temporary transfer data. Never persisted to Google Sheets. */
+  base64Data?: string;
 }
 
 export type FormResponses = Record<string, any>;
@@ -93,6 +95,14 @@ export interface QuestionnaireSubmissionPayload {
   business_unit: string;
   client: string;
   answers: SubmissionAnswerItem[];
+  supporting_documents?: SupportingDocumentUpload[];
+}
+
+export interface SupportingDocumentUpload {
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  base64Data: string;
 }
 
 export interface SubmissionResponse {

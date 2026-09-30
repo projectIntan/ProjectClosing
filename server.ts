@@ -7,8 +7,8 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // Support JSON request bodies up to 20MB (for any base64/attachments)
-  app.use(express.json({ limit: '20mb' }));
+  // Support multiple 10 MB attachments after base64 encoding.
+  app.use(express.json({ limit: '50mb' }));
 
   // 1. Health check endpoint
   app.get('/api/health', (req: Request, res: Response) => {
