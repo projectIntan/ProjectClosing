@@ -15,6 +15,21 @@ async function startServer() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
+  app.get('/api/dashboard', async (req: Request, res: Response) => {
+    const gasUrl = ((req.headers['x-target-gas-url'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL || GOOGLE_APPS_SCRIPT_URL || '').trim();
+    if (!gasUrl) return res.status(503).json({ success: false, error: 'URL Google Apps Script belum dikonfigurasi.' });
+    try {
+      const response = await fetch(`${gasUrl}${gasUrl.includes('?') ? '&' : '?'}action=dashboard`, { redirect: 'follow' });
+      const text = await response.text();
+      let result: any;
+      try { result = JSON.parse(text); } catch { result = null; }
+      if (!response.ok || !result) return res.status(502).json({ success: false, error: 'Respons dashboard dari Google Apps Script tidak valid.' });
+      return res.status(200).json(result);
+    } catch {
+      return res.status(502).json({ success: false, error: 'Gagal menghubungi Google Apps Script untuk data dashboard.' });
+    }
+  });
+
   // 2. Google Apps Script Connectivity Diagnostic
   app.post('/api/check-gas', async (req: Request, res: Response) => {
     const { url } = req.body || {};
